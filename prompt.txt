@@ -1,0 +1,152 @@
+
+I need you to backport a security patch to a repository specific version - and for this version only.
+You are an expert in secure coding practices and patch equivalence analysis.
+
+REPOSITORY INFORMATION:
+Repository: react-pdf
+Target version for backport: 6.2.2
+
+
+VULNERABILITY INFORMATION:
+Vulnerability ID: CVE-2024-34342
+Description: react-pdf displays PDFs in React apps. If PDF.js is used to load a malicious PDF, and PDF.js is configured with `isEvalSupported` set to `true` (which is the default value), unrestricted attacker-controlled JavaScript will be executed in the context of the hosting domain. This vulnerability is fixed in 7.7.3 and 8.0.2.
+
+
+AFFECTED FILES:
+- packages/react-pdf/src/Document.tsx
+
+
+THE SECURITY PATCH:
+```diff
+From d03eda118b9f05fc2c46cb16c1e8220eae7b145a Mon Sep 17 00:00:00 2001
+From: Seal <info@sealsecurity.io>
+Date: Wed, 26 Nov 2025 12:45:52 +0000
+Subject: [PATCH] CVE-2024-34342
+
+---
+ packages/react-pdf/src/Document.tsx | 2 ++--
+ 1 file changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/packages/react-pdf/src/Document.tsx b/packages/react-pdf/src/Document.tsx
+index 59dcfa439..0dd7999ee 100644
+--- a/packages/react-pdf/src/Document.tsx
++++ b/packages/react-pdf/src/Document.tsx
+@@ -505,7 +505,7 @@ const Document = forwardRef(function Document(
+       return;
+     }
+ 
+-    const optionsWithModifiedIsEvalSupported: Options = { ...options, isEvalSupported: true };
++    const optionsWithModifiedIsEvalSupported: Options = { ...options, isEvalSupported: false };
+ 
+     const documentInitParams: Source = {
+       ...source,
+
+```
+
+## YOUR TASK
+
+Backport to the current version of the code.
+
+### Before Implementing
+
+1. **Baseline**: Create worktree at target version, run tests, document passing/failing counts
+2. **Dependency constraints**: Identify version differences (libraries, APIs) between source and target - you CANNOT update dependencies, must adapt to target version's APIs
+3. **Usage analysis**: How is the code being modified used in target version? Check callers and test files for assumptions (spies, mocks, call counts)
+4. **Implementation comparison**: Side-by-side compare source and target implementations (trace parameter transformations, normalization, ordering)
+5. **Adaptation plan**: Document how to achieve same behavior with target version's API constraints
+---
+
+### Implementation Workflow
+
+Implement and iterate until test counts match baseline. If stuck, add comparative logs between baseline and work (remove these debug logs before finalizing once all tests pass).
+**Steps:**
+
+1. **Examine the patch**: Understand what vulnerability it fixes and what files are affected (including test files and build configuration).
+
+2. **For each affected file**:
+   a. Open the file in the repository
+   b. Analyze how the patch should be applied considering the file's current state
+   c. Apply the security fix, adapting as needed based on the older codebase
+   d. **Important**: Also backport any tests that verify the security fix
+   e. Save your changes to the file
+
+3. **CRITICAL REQUIREMENT**: If you run ANY tests, builds, or compilation commands (make, gcc, mvn, npm, dpkg-buildpackage, pytest, etc.), you MUST use a worktree. Never run builds directly in the working directory - build artifacts will pollute your patch diff.
+
+   **Required workflow for any testing/building:**
+   ```bash
+   # Commit your changes to create a snapshot
+   git add -A
+   git commit -m "Apply security patch"
+
+   # Create a temporary worktree for testing (detached from your commit)
+   git worktree add /tmp/test-worktree HEAD
+
+   # Run tests in the isolated worktree
+   cd /tmp/test-worktree
+   npm test  # or mvn test, pytest, etc.
+
+   # Return to main worktree
+   cd -
+
+   # Clean up the test worktree
+   git worktree remove /tmp/test-worktree
+
+   # Reset the commit but keep your changes (back to uncommitted state)
+   git reset --soft HEAD~1
+   ```
+
+   If tests fail, make fixes in your main working directory, amend the commit (`git commit -a --amend --no-edit`), and repeat the test process. Build artifacts stay in the temporary worktree and never affect your patch.
+
+   Running tests/builds is optional, but if you choose to run ANY compilation or testing commands, the worktree workflow above is MANDATORY.
+
+4. **Return JSON report**: Return a JSON report of what files you modified and what changes you made.
+**IMPORTANT**: Include the JSON in your text response only - do NOT create a separate file for the report.
+---
+
+### Key Principles
+
+- **CVE Scope**: Make only the changes necessary to fix THIS specific CVE. Do not fix other vulnerabilities you discover during analysis, even if similar.- **Symbol Verification**: If code from the patch references symbols not present in the target codebase, verify the vulnerability exists before applying the fix.- **Patch Adaptation**: Don't try to modify our code to match the diff exactly. There can often be a significant time gap between the SECURITY PATCH and the current state of our repository. Function signatures and variable names may have changed — and that's perfectly okay.
+
+  Your goal is to replicate the security outcome, not the literal code. When adapting the patch, your changes must integrate seamlessly with the target codebase. For any function you modify:
+  - Understand its established patterns and conventions
+  - Ensure your new code follows the same behavior contract as the existing code
+  - Verify that callers of the function will still work correctly with your changes
+
+  The security fix should blend in as if it was always part of the original code.- **Minimal Changes**: Focus on making minimal, targeted changes to fix the security vulnerability
+- **Test Coverage**: Tests that verify the fix are as important as the fix itself
+- **Documentation**: Don't waste time modifying documentation or HTML files — focus only on the relevant code changes and their tests
+- **Compilation**: Make sure the changes won't break the code and that it still runs and compiles. In case it won't you will lose money
+- **Code Style**: Maintain the coding style and structure of the original files
+
+---
+
+### Response Format
+
+After deep analysis, if you reach the conclusion the vulnerable code doesn't exist in the target version, report this clearly rather than fixing different code.
+
+Return your response in the following format:
+```json
+{{
+    "cve_fixed": "CVE-xxxx-xxxx",
+    "vulnerability_exists_in_target": true,
+    "modified_files": [
+        {{
+        "path": "path/to/file1",
+        "changes": "Brief description of changes made"
+        }},
+        {{
+        "path": "path/to/file2",
+        "changes": "Brief description of changes made"
+        }}
+    ],
+    "summary": "Brief summary of the vulnerability fixed"
+}}
+``` or 
+```json
+{{
+    "cve_fixed": "CVE-xxxx-xxxx",
+    "vulnerability_exists_in_target": false,
+    "modified_files": [],
+    "summary": "The vulnerable code pattern does not exist in this version. Explanation: [describe what you looked for and why it's absent]"
+}}
+```
